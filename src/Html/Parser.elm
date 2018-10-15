@@ -138,14 +138,27 @@ attribute =
 
 attributes : Parser (List Attribute)
 attributes =
-    sequence
-        { start = ""
-        , separator = " "
-        , end = ">"
-        , spaces = chompWhile (\_ -> False)
-        , item = attribute
-        , trailing = Optional -- demand a trailing semi-colon
-        }
+    let
+        attributesHelp : List Attribute -> Parser (Step (List Attribute) (List Attribute))
+        attributesHelp revAttribs =
+            oneOf
+                [ succeed (\attr -> Loop (attr :: revAttribs))
+                    |. backtrackable oneOrMoreHtmlSpaces
+                    |= attribute
+                , succeed ()
+                    |> map (\_ -> Done (List.reverse revAttribs))
+                ]
+    in
+    loop [] attributesHelp
+
+    -- sequence
+    --     { start = ""
+    --     , separator = " "
+    --     , end = ">"
+    --     , spaces = chompWhile (\_ -> False)
+    --     , item = attribute
+    --     , trailing = Optional -- demand a trailing semi-colon
+    --     }
 
 
 
@@ -166,54 +179,39 @@ attributes =
 --     sequenceEnd i.end i.item i.separator
 
 
-sequenceEnd : Parser () -> Parser a -> Parser () -> Parser (List a)
-sequenceEnd ender parseItem sep =
-    let
-        chompRest item =
-            loop [ item ] (sequenceEndOptional ender parseItem sep)
-    in
-    oneOf
-        [ parseItem |> andThen chompRest
-        , ender |> map (\_ -> [])
-        ]
+-- sequenceEnd : Parser () -> Parser a -> Parser () -> Parser (List a)
+-- sequenceEnd ender parseItem sep =
+--     let
+--         chompRest item =
+--             loop [ item ] (sequenceEndOptional ender parseItem sep)
+--     in
+--     oneOf
+--         [ parseItem |> andThen chompRest
+--         , ender |> map (\_ -> [])
+--         ]
 
 
-sequenceEndOptional :
-    Parser ()
-    -> Parser a
-    -> Parser ()
-    -> List a
-    -> Parser (Step (List a) (List a))
-sequenceEndOptional ender parseItem sep revItems =
-    let
-        parseEnd =
-            map (\_ -> Done (List.reverse revItems)) ender
-    in
-    oneOf
-        [ skip sep <|
-            oneOf
-                [ parseItem |> map (\item -> Loop (item :: revItems))
-                , parseEnd
-                ]
-        , parseEnd
-        ]
+-- sequenceEndOptional :
+--     Parser ()
+--     -> Parser a
+--     -> Parser ()
+--     -> List a
+--     -> Parser (Step (List a) (List a))
+-- sequenceEndOptional ender parseItem sep revItems =
+--     let
+--         parseEnd =
+--             map (\_ -> Done (List.reverse revItems)) ender
+--     in
+--     oneOf
+--         [ skip sep <|
+--             oneOf
+--                 [ parseItem |> map (\item -> Loop (item :: revItems))
+--                 , parseEnd
+--                 ]
+--         , parseEnd
+--         ]
 
 
-skip : Parser ignore -> Parser keep -> Parser keep
-skip iParser kParser =
-    kParser |. iParser
-
-
-
--- let
---     attributesHelp : List Attribute -> Parser (Step (List Attribute) (List Attribute))
---     attributesHelp revAttribs =
---         oneOf
---             [ succeed (\attr -> Loop (attr :: revAttribs))
---                 |. backtrackable oneOrMoreHtmlSpaces
---                 |= attribute
---             , succeed ()
---                 |> map (\_ -> Done (List.reverse revAttribs))
---             ]
--- in
--- loop [] attributesHelp
+-- skip : Parser ignore -> Parser keep -> Parser keep
+-- skip iParser kParser =
+--     kParser |. iParser
