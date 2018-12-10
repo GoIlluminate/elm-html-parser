@@ -1,4 +1,4 @@
-module Html.Parser exposing (Attribute, Tag, attribute, isAttribNameChar, nonAttribNameChars, spaceChars, tag, zeroOrMoreHtmlSpaces)
+module Html.Parser exposing (Attribute, Element(..), Tag, attribute, element, elements, isAttribNameChar, nonAttribNameChars, spaceChars, zeroOrMoreHtmlSpaces)
 
 import Parser exposing (..)
 import Set exposing (Set, fromList, member, union)
@@ -71,6 +71,12 @@ oneOrMoreHtmlSpaces =
         |. chompWhile (\c -> member c spaceChars)
 
 
+type Element
+    = Void Tag
+    | Normal Tag (List Element)
+    | Text String
+
+
 type alias Tag =
     { name : String
     , attributes : List Attribute
@@ -83,20 +89,71 @@ type alias Attribute =
     }
 
 
-tag : Parser Tag
-tag =
+elements : Parser (List Element)
+elements =
+    let
+        elementStepper : List Element -> Element -> Step (List Element) (List Element)
+        elementStepper revElems elem =
+            case elem of
+                Text "" ->
+                    Done (List.reverse revElems)
+                _ ->
+                    Loop (elem :: revElems)
+        elementsHelp : List Element -> Parser (Step (List Element) (List Element))
+        elementsHelp revElems =
+            succeed (elementStepper revElems)
+                |= element
+    in
+    loop [] elementsHelp
+
+
+element : Parser Element
+element =
+    oneOf
+        [ backtrackable voidTag
+        , backtrackable normalTag
+        , textElement
+        ]
+
+
+partialTag : String -> String -> Parser Tag
+partialTag openSymbol closeSymbol =
     succeed Tag
-        |. symbol "<"
+        |. symbol openSymbol
         |. zeroOrMoreHtmlSpaces
         |= getChompedString (chompWhile Char.isAlpha)
         |= oneOf
             [ attributes
             , zeroOrMoreHtmlSpaces |> andThen (\_ -> succeed [])
             ]
+        |. zeroOrMoreHtmlSpaces
+        |. symbol closeSymbol
 
 
+voidTag : Parser Element
+voidTag =
+    Parser.map Void <|
+        partialTag "<" "/>"
 
--- |. symbol ">"
+
+normalTag : Parser Element
+normalTag =
+    succeed Normal
+        |= partialTag "<" ">"
+        |= lazy (\_ -> elements)
+        |. partialTag "</" ">"
+
+
+-- See https://www.w3.org/TR/html51/syntax.html#rawtext-state
+-- "<" and EOF are the only characters that aren't valid raw text.
+textElement : Parser Element
+textElement =
+    Parser.map Text <| getChompedString <| chompUntilEndOr "<"
+
+
+checkTagName : Tag -> Parser ()
+checkTagName tag =
+    symbol tag.name
 
 
 attribute : Parser Attribute
@@ -151,17 +208,16 @@ attributes =
     in
     loop [] attributesHelp
 
-    -- sequence
-    --     { start = ""
-    --     , separator = " "
-    --     , end = ">"
-    --     , spaces = chompWhile (\_ -> False)
-    --     , item = attribute
-    --     , trailing = Optional -- demand a trailing semi-colon
-    --     }
 
 
-
+-- sequence
+--     { start = ""
+--     , separator = " "
+--     , end = ">"
+--     , spaces = chompWhile (\_ -> False)
+--     , item = attribute
+--     , trailing = Optional -- demand a trailing semi-colon
+--     }
 -- attributes : Parser (List Attribute)
 -- attributes =
 --     sequence
@@ -177,8 +233,6 @@ attributes =
 --     -> Parser (List a)
 -- sequence i =
 --     sequenceEnd i.end i.item i.separator
-
-
 -- sequenceEnd : Parser () -> Parser a -> Parser () -> Parser (List a)
 -- sequenceEnd ender parseItem sep =
 --     let
@@ -189,8 +243,6 @@ attributes =
 --         [ parseItem |> andThen chompRest
 --         , ender |> map (\_ -> [])
 --         ]
-
-
 -- sequenceEndOptional :
 --     Parser ()
 --     -> Parser a
@@ -210,8 +262,6 @@ attributes =
 --                 ]
 --         , parseEnd
 --         ]
-
-
 -- skip : Parser ignore -> Parser keep -> Parser keep
 -- skip iParser kParser =
 --     kParser |. iParser

@@ -10,33 +10,59 @@ import Test exposing (..)
 suite : Test
 suite =
     describe "All the parsing"
-        [ describe "Tag parsing"
+        [ describe "Void tag parsing"
             [ test "Parses a basic tag" <|
                 \_ ->
-                    run tag "<html>"
-                        |> Expect.equal (Ok <| Tag "html" [])
+                    run element "<html/>"
+                        |> Expect.equal (Ok <| Void <| Tag "html" [])
             , test "Parses a tag with leading/trailing whitespace" <|
                 \_ ->
-                    run tag "< html >"
-                        |> Expect.equal (Ok <| Tag "html" [])
+                    run element "< html />"
+                        |> Expect.equal (Ok <| Void <| Tag "html" [])
             , test "Parses a tag with an attribute" <|
                 \_ ->
-                    run tag "<html id=\"abc123\">"
+                    run element "<html id=\"abc123\"/>"
                         |> Expect.equal
                             (Ok <|
-                                Tag "html"
-                                    [ Attribute "id" "abc123" ]
+                                Void <|
+                                    Tag "html"
+                                        [ Attribute "id" "abc123" ]
                             )
             , test "Parses a tag with weird spaces" <|
                 \_ ->
-                    run tag "<html\tid = abc123\tclass = wtf>"
+                    run element "<html\tid = abc123\tclass = wtf/>"
                         |> Expect.equal
                             (Ok <|
-                                Tag "html"
-                                    [ Attribute "id" "abc123"
-                                    , Attribute "class" "wtf"
-                                    ]
+                                Void <|
+                                    Tag "html"
+                                        [ Attribute "id" "abc123"
+                                        , Attribute "class" "wtf"
+                                        ]
                             )
+            ]
+        , describe "Normal tag parsing"
+            [ test "Parses an empty tag" <|
+                \_ ->
+                    run element "<html></html>"
+                        |> Expect.equal (Ok <| Normal (Tag "html" []) [])
+            , test "Parses a tag with inner text" <|
+                \_ ->
+                    run element "<b>this is bold</b>"
+                        |> Expect.equal (Ok <| Normal (Tag "b" []) [ Text "this is bold" ])
+            ]
+        , describe "Text tag parsing"
+            [ test "Parses normal text" <|
+                \_ ->
+                    run element "this is some text"
+                        |> Expect.equal (Ok <| Text "this is some text")
+            , test "Parses text with special characters" <|
+                \_ ->
+                    run element "this > is \\ some / wierd = \"text\""
+                        |> Expect.equal (Ok <| Text "this > is \\ some / wierd = \"text\"")
+            , test "Doesn't parse an empty text" <|
+                \_ ->
+                    run elements ""
+                        |> Expect.equal (Ok [])
             ]
         , describe "Tag Attribute parsing" <|
             [ test "Parses an unquoted attribute" <|
