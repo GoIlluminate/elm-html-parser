@@ -59,10 +59,21 @@ suite =
                 \_ ->
                     run element "this > is \\ some / wierd = \"text\""
                         |> Expect.equal (Ok <| Text "this > is \\ some / wierd = \"text\"")
-            , test "Doesn't parse an empty text" <|
+            ]
+        , describe "Parsing multiple elements"
+            [ test "Doesn't parse an empty text" <|
                 \_ ->
                     run elements ""
                         |> Expect.equal (Ok [])
+            , test "Parses multiple elements" <|
+                \_ ->
+                    run elements "<head>asdf</head><body>qwerty</body>"
+                        |> Expect.equal
+                            (Ok
+                                [ Normal (Tag "head" []) [ Text "asdf" ]
+                                , Normal (Tag "body" []) [ Text "qwerty" ]
+                                ]
+                            )
             ]
         , describe "Tag Attribute parsing" <|
             [ test "Parses an unquoted attribute" <|

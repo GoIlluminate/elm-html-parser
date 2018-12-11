@@ -1,5 +1,7 @@
 module Html.Parser exposing (Attribute, Element(..), Tag, attribute, element, elements, isAttribNameChar, nonAttribNameChars, spaceChars, zeroOrMoreHtmlSpaces)
 
+import Html exposing (Html, node, text)
+import Html.Attributes as Attributes
 import Parser exposing (..)
 import Set exposing (Set, fromList, member, union)
 
@@ -97,8 +99,10 @@ elements =
             case elem of
                 Text "" ->
                     Done (List.reverse revElems)
+
                 _ ->
                     Loop (elem :: revElems)
+
         elementsHelp : List Element -> Parser (Step (List Element) (List Element))
         elementsHelp revElems =
             succeed (elementStepper revElems)
@@ -144,8 +148,11 @@ normalTag =
         |. partialTag "</" ">"
 
 
+
 -- See https://www.w3.org/TR/html51/syntax.html#rawtext-state
 -- "<" and EOF are the only characters that aren't valid raw text.
+
+
 textElement : Parser Element
 textElement =
     Parser.map Text <| getChompedString <| chompUntilEndOr "<"
@@ -207,3 +214,27 @@ attributes =
                 ]
     in
     loop [] attributesHelp
+
+
+elementToHtml : Element -> Html msg
+elementToHtml elem =
+    case elem of
+        Text txt ->
+            text txt
+
+        Void tag ->
+            node tag.name (List.map attributeToHtmlAttribute tag.attributes) []
+
+        Normal tag elems ->
+            node tag.name
+                (List.map attributeToHtmlAttribute tag.attributes)
+                (List.map elementToHtml elems)
+
+
+
+-- TODO: Is this ok? Might need to use properties in some cases.
+
+
+attributeToHtmlAttribute : Attribute -> Html.Attribute msg
+attributeToHtmlAttribute attr =
+    Attributes.attribute attr.name attr.value
